@@ -9,7 +9,7 @@
 - Dart SDK: ^3.8.1
 - RAM: 8 GB (performans kısıtı — build_runner / flutter run zaman zaman yavaş olabilir)
 - Cihaz bağlantısı: Kablosuz ADB
-- Proje yolu (local): `E:\_Project Reserve\Proje\Flutter\APP\zaman_yonetimi_app`
+- Proje yolu (local): `E:\_Project Reserve\Proje\Flutter\GitHub\zaman_yonetimi_app`
 - Repo: https://github.com/dev-gotto/zaman_yonetimi_app
 
 **Bilinen kısıtlamalar:**
@@ -78,7 +78,7 @@ lib/
    - `repository_provider.dart`'a `categoryRepositoryProvider` eklendi.
    - `main.dart`'ta kategori repository'si de init ediliyor.
    - `task_list_screen.dart`'taki görev ekleme diyaloğuna kategori dropdown + "yeni kategori ekle" butonu eklendi, seçilen kategori göreve kaydediliyor.
-3. ✅ **Kategori-FK Migration — kod tarafında tamamlandı, cihazda test bekliyor:**
+3. ✅ **Kategori-FK Migration — kod tarafında tamamlandı VE cihazda doğrulandı:**
    - `Category` modeli eklendi (`lib/core/models/category.dart` + `category.g.dart`, `typeId: 1`).
    - `Task.category` (String) → `Task.categoryId` (String, FK) oldu. Alan numarası (`@HiveField(6)`) kasıtlı olarak değiştirilmedi — eski binary veriyle uyumluluk için.
    - `CategoryRepository` arayüzü genişledi: `addCategory` artık `Category` döner, ayrıca `getCategoryById`, `renameCategory`, `deleteCategory` eklendi (rename/delete'in UI'ı henüz yok, altyapı hazır).
@@ -86,15 +86,17 @@ lib/
    - **Migration mantığı** yeni bir dosyada: `lib/core/migration/category_fk_migration.dart` → `CategoryFkMigration.runIfNeeded()`. `main.dart`'ta repository init'lerinden ÖNCE çağrılıyor. Tek seferlik çalışır (`meta` box'ında `migrated_v2` flag'i ile korunuyor), eski kategori isimlerini yeni ID'li `Category` kayıtlarına çevirir ve mevcut görevlerin `categoryId` alanını günceller. Eşleşmeyen (orphan) görevler dokunulmadan bırakılıp loglanıyor.
    - `category_provider.dart` artık `List<Category>` state tutuyor; ayrıca `categoryByIdProvider` eklendi (UI'da `categoryId` → isim lookup için).
    - `task_list_screen.dart` güncellendi: dropdown artık kategori id'si üzerinden çalışıyor, görev satırındaki alt metinde kategori adı `categoryByIdProvider` ile gösteriliyor.
-   - **⚠️ Önemli — build_runner:** `category.g.dart` bu ortamda `build_runner` çalıştırılamadığı için `task.g.dart`'taki pattern birebir takip edilerek elle yazıldı. Projeyi çektikten sonra bir fırsatta şunu çalıştırıp dosyanın gerçek codegen çıktısıyla eşleştiğini doğrulaman önerilir:
+   - **⚠️ Önemli — build_runner:** `category.g.dart` bu ortamda `build_runner` çalıştırılamadığı için `task.g.dart`'taki pattern birebir takip edilerek elle yazıldı. Cihazda gerçek verilerle sorunsuz migration+CRUD çalıştığı doğrulandı, dolayısıyla adapter'ın doğru üretildiği fiilen kanıtlandı. Yine de fırsat bulunca aşağıdaki komutla resmi codegen çıktısıyla eşleştiği teyit edilebilir:
      ```
      flutter pub run build_runner build --delete-conflicting-outputs
      ```
-   - **Test checklist (cihazda/emülatörde doğrulanacak):**
-     - [ ] Var olan (migration öncesi) görevlerle uygulama açılıyor, görevler eski kategorileriyle doğru görünüyor mu?
-     - [ ] Konsolda `[CategoryFkMigration]` logları migration'ın bir kez çalıştığını, ikinci açılışta "zaten migrate edilmiş" dediğini gösteriyor mu?
-     - [ ] Yeni görev eklerken kategori dropdown'u ve "yeni kategori ekle" akışı çalışıyor mu?
-     - [ ] `flutter run` ile tam derleme yapıldı mı (yeni Hive tipi eklendiği için hot reload yetmez)?
+   - **Gerçek cihaz testi sonucu (25 Temmuz 2026, `flutter run` ile):**
+     - [x] Var olan (migration öncesi) görevler doğru kategorileriyle görüntülendi.
+     - [x] Migration ilk açılışta çalıştı — konsol: `5 kategori tasindi: [Genel, İş, Kişisel, testing IV, yeni kategori]`, `5 gorev guncellendi, 0 gorev eslesmeden birakildi.` **0 orphan — veri kaybı yok.**
+     - [x] Uygulama telefonda tamamen kapatılıp tekrar açıldığında sorunsuz çalıştı (bu, `flutter run` debug köprüsünden bağımsız bir açılış olduğu için konsol logu görünmedi, ama migration flag kontrolünün hataya yol açmadığının dolaylı kanıtı — çökme/hata olsaydı uygulama açılmazdı).
+     - [x] Yeni görev eklerken kategori dropdown'u ve "yeni kategori ekle" akışı sorunsuz çalıştı.
+     - [x] `flutter run` ile tam derleme yapıldı (Gradle build başarılı, APK cihaza kuruldu).
+   - **Sonuç: Migration production-ready kabul edildi.** Sıradaki adımlara geçilebilir.
 4. ⏳ Sıradaki adımlar (henüz yapılmadı, plan netleşti — migration bitince sırayla yapılacak):
    - **Task Update (düzenleme):** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak.
    - **Kategori tam CRUD:** Yeniden adlandırma (rename — FK sayesinde otomatik cascade olacak) + silme (bir kategori herhangi bir görev tarafından kullanılıyorsa silinemeyecek, kullanım sayısı FK üzerinden kontrol edilecek).
