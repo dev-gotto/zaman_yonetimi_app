@@ -51,12 +51,7 @@ class TaskListScreen extends ConsumerWidget {
                 onDismissed: (_) {
                   ref.read(taskListProvider.notifier).deleteTask(task.id);
                 },
-                child: CheckboxListTile(
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: task.isCompleted,
-                  onChanged: (_) {
-                    ref.read(taskListProvider.notifier).toggleComplete(task.id);
-                  },
+                child: ListTile(
                   onTap: () {
                     Navigator.push(
                       context,
@@ -65,6 +60,21 @@ class TaskListScreen extends ConsumerWidget {
                       ),
                     );
                   },
+                  // Not: Bu Flutter sürümünde CheckboxListTile'ın onTap
+                  // parametresi yok (derleme hatası verdi), bu yüzden
+                  // leading'e manuel bir Checkbox koyup normal ListTile
+                  // kullanıyoruz — Checkbox kendi dokunma alanını ayrı
+                  // yönettiği için satırın geri kalanına dokunma detay
+                  // ekranını açar, checkbox'a dokunma sadece tamamlama
+                  // durumunu değiştirir.
+                  leading: Checkbox(
+                    value: task.isCompleted,
+                    onChanged: (_) {
+                      ref
+                          .read(taskListProvider.notifier)
+                          .toggleComplete(task.id);
+                    },
+                  ),
                   title: Text(
                     task.title,
                     maxLines: 1,
@@ -102,7 +112,7 @@ class TaskListScreen extends ConsumerWidget {
                         ),
                     ],
                   ),
-                  secondary: IconButton(
+                  trailing: IconButton(
                     icon: const Icon(Icons.play_circle_outline),
                     tooltip: 'Bu görev için sayaç başlat',
                     onPressed: () {
