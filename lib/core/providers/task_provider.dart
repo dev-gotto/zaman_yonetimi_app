@@ -36,6 +36,31 @@ class TaskListNotifier extends AsyncNotifier<List<Task>> {
     state = AsyncValue.data(await repo.getAllTasks());
   }
 
+  Future<void> updateTask(Task task) async {
+    final repo = ref.read(taskRepositoryProvider);
+    await repo.updateTask(task);
+
+    // Performans notu: native bildirim çağrıları (özellikle zonedSchedule)
+    // diğer repo/provider işlemlerine göre daha maliyetli — bu yüzden
+    // gereksiz yere iki kez çağırmıyoruz. Eskisini her durumda iptal ediyoruz
+    // (ucuz işlem), ama yeniden planlamayı SADECE görev tamamlanmamışsa
+    // yapıyoruz — tamamlanmış bir görev için zaten bildirime gerek yok,
+    // scheduleTaskNotification'ı boş yere çağırıp geçmiş tarih kontrolüne
+    // takılmasına gerek bırakmıyoruz.
+    final notificationService = ref.read(notificationServiceProvider);
+    await notificationService.cancelNotification(task.id.hashCode);
+    if (!task.isCompleted) {
+      await notificationService.scheduleTaskNotification(
+        id: task.id.hashCode,
+        title: task.title,
+        body: task.description ?? 'Görev zamanı geldi',
+        scheduledDate: task.dueDate,
+      );
+    }
+
+    state = AsyncValue.data(await repo.getAllTasks());
+  }
+
   Future<void> deleteTask(String id) async {
     final repo = ref.read(taskRepositoryProvider);
     await repo.deleteTask(id);

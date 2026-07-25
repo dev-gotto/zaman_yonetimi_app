@@ -112,17 +112,32 @@ class TaskListScreen extends ConsumerWidget {
                         ),
                     ],
                   ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.play_circle_outline),
-                    tooltip: 'Bu görev için sayaç başlat',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TimerScreen(task: task),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined),
+                        tooltip: 'Görevi düzenle',
+                        onPressed: () => _showTaskDialog(
+                          context,
+                          ref,
+                          categoriesAsync.value ?? const [],
+                          existingTask: task,
                         ),
-                      );
-                    },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.play_circle_outline),
+                        tooltip: 'Bu görev için sayaç başlat',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TimerScreen(task: task),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -133,7 +148,7 @@ class TaskListScreen extends ConsumerWidget {
         error: (err, stack) => Center(child: Text('Hata: $err')),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddTaskDialog(
+        onPressed: () => _showTaskDialog(
           context,
           ref,
           categoriesAsync.value ?? const [],
@@ -143,27 +158,38 @@ class TaskListScreen extends ConsumerWidget {
     );
   }
 
-  void _showAddTaskDialog(
+  // existingTask verilirse ekleme yerine düzenleme modunda açılır: alanlar
+  // mevcut değerlerle dolu gelir, "Ekle" yerine "Güncelle" gösterilir ve
+  // kaydetme taskListProvider.updateTask'i çağırır. Aynı diyaloğun hem
+  // ekleme hem düzenleme için kullanılması, iki ayrı dialog'u senkron
+  // tutma yükünü (performans + bakım açısından) ortadan kaldırıyor.
+  void _showTaskDialog(
     BuildContext context,
     WidgetRef ref,
-    List<Category> categories,
-  ) {
-    final titleController = TextEditingController();
-    DateTime selectedDate = DateTime.now();
-    TimeOfDay selectedTime = TimeOfDay.now();
+    List<Category> categories, {
+    Task? existingTask,
+  }) {
+    final isEditing = existingTask != null;
+    final titleController = TextEditingController(
+      text: existingTask?.title ?? '',
+    );
+    DateTime selectedDate = existingTask?.dueDate ?? DateTime.now();
+    TimeOfDay selectedTime = existingTask != null
+        ? TimeOfDay.fromDateTime(existingTask.dueDate)
+        : TimeOfDay.now();
     List<Category> availableCategories = List.from(categories);
     // Dropdown artık kategori id'si üzerinden çalışıyor (FK), gösterimde
     // Category.name kullanılıyor.
-    String? selectedCategoryId = availableCategories.isNotEmpty
-        ? availableCategories.first.id
-        : null;
+    String? selectedCategoryId =
+        existingTask?.categoryId ??
+        (availableCategories.isNotEmpty ? availableCategories.first.id : null);
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           scrollable: true,
-          title: const Text('Yeni Görev'),
+          title: Text(isEditing ? 'Görevi Düzenle' : 'Yeni Görev'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -299,7 +325,11 @@ class TaskListScreen extends ConsumerWidget {
             ElevatedButton(
               onPressed: () {
                 // ignore: avoid_print
-                print('### EKLE BUTONUNA BASILDI ###');
+                print(
+                  isEditing
+                      ? '### GUNCELLE BUTONUNA BASILDI ###'
+                      : '### EKLE BUTONUNA BASILDI ###',
+                );
 
                 if (titleController.text.trim().isEmpty) {
                   // ignore: avoid_print
@@ -322,36 +352,76 @@ class TaskListScreen extends ConsumerWidget {
                 );
 
                 // ignore: avoid_print
-                print('### GOREV OLUSTURULUYOR: dueDate=$combinedDateTime ###');
-
-                final task = Task(
-                  id: const Uuid().v4(),
-                  title: titleController.text.trim(),
-                  dueDate: combinedDateTime,
-                  categoryId: selectedCategoryId!,
+                print(
+                  '### GOREV ${isEditing ? "GUNCELLENIYOR" : "OLUSTURULUYOR"}: '
+                  'dueDate=$combinedDateTime ###',
                 );
 
-                ref
-                    .read(taskListProvider.notifier)
-                    .addTask(task)
-                    .then((_) {
-                      // ignore: avoid_print
-                      print('### addTask BASARIYLA TAMAMLANDI ###');
-                    })
-                    .catchError((e, stack) {
-                      // ignore: avoid_print
-                      print('### addTask HATA VERDI: $e ###');
-                      // ignore: avoid_print
-                      print(stack);
-                    });
+                final notifier = ref.read(taskListProvider.notifier);
+
+                if (isEditing) {
+                  // Düzenlemede sadece diyalogda gösterilen alanlar
+                  // (başlık/tarih/saat/kategori) değişiyor. Diyalogda
+                  // düzenlenmeyen alanları (description, repeatType,
+                  // isCompleted, createdAt) mevcut görevden aynen koruyoruz —
+                  // aksi halde örneğin tamamlanmış bir görevi düzenlemek onu
+                  // yanlışlıkla "tamamlanmadı" durumuna geri döndürebilirdi.
+                  final updatedTask = Task(
+                    id: existingTask.id,
+                    title: titleController.text.trim(),
+                    description: existingTask.description,
+                    dueDate: combinedDateTime,
+                    isCompleted: existingTask.isCompleted,
+                    repeatType: existingTask.repeatType,
+                    categoryId: selectedCategoryId!,
+                    createdAt: existingTask.createdAt,
+                  );
+
+                  notifier
+                      .updateTask(updatedTask)
+                      .then((_) {
+                        // ignore: avoid_print
+                        print('### updateTask BASARIYLA TAMAMLANDI ###');
+                      })
+                      .catchError((e, stack) {
+                        // ignore: avoid_print
+                        print('### updateTask HATA VERDI: $e ###');
+                        // ignore: avoid_print
+                        print(stack);
+                      });
+                } else {
+                  final task = Task(
+                    id: const Uuid().v4(),
+                    title: titleController.text.trim(),
+                    dueDate: combinedDateTime,
+                    categoryId: selectedCategoryId!,
+                  );
+
+                  notifier
+                      .addTask(task)
+                      .then((_) {
+                        // ignore: avoid_print
+                        print('### addTask BASARIYLA TAMAMLANDI ###');
+                      })
+                      .catchError((e, stack) {
+                        // ignore: avoid_print
+                        print('### addTask HATA VERDI: $e ###');
+                        // ignore: avoid_print
+                        print(stack);
+                      });
+                }
 
                 Navigator.pop(context);
               },
-              child: const Text('Ekle'),
+              child: Text(isEditing ? 'Güncelle' : 'Ekle'),
             ),
           ],
         ),
       ),
-    );
+      // Performans/bellek notu: TextEditingController diyalog kapandıktan
+      // sonra elden çıkarılmazsa (dispose edilmezse) sızıntıya yol açar.
+      // Diyalog sık açılıp kapanan bir widget olduğu için (her görev
+      // ekleme/düzenlemede) bunu burada garanti altına alıyoruz.
+    ).then((_) => titleController.dispose());
   }
 }

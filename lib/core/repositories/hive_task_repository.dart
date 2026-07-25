@@ -39,7 +39,14 @@ class HiveTaskRepository implements TaskRepository {
 
   @override
   Future<void> updateTask(Task task) async {
-    await task.save();
+    // Not: task.save() yerine _box.put() kullanıyoruz. Düzenleme akışı
+    // (task_list_screen.dart) mevcut görevi güncellerken addTask ile aynı
+    // pattern'i izleyip box'a bağlı OLMAYAN yeni bir Task nesnesi kuruyor
+    // (aynı id ile). task.save() sadece box'tan gelen, box'a zaten bağlı
+    // nesnelerde çalışır — yeni oluşturulmuş bir nesnede HiveError fırlatır.
+    // _box.put(key, value) ise key eşleşirse var olan kaydı sorunsuz
+    // overwrite eder, ekstra bir "box'a bağlama" adımına gerek kalmaz.
+    await _box.put(task.id, task);
   }
 
   @override
