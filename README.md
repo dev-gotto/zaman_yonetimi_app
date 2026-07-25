@@ -47,6 +47,9 @@ lib/
   features/
     tasks/
       task_list_screen.dart
+      task_detail_screen.dart
+    categories/
+      category_management_screen.dart
     calendar/
       calendar_screen.dart
     timer/
@@ -97,16 +100,18 @@ lib/
      - [x] Yeni görev eklerken kategori dropdown'u ve "yeni kategori ekle" akışı sorunsuz çalıştı.
      - [x] `flutter run` ile tam derleme yapıldı (Gradle build başarılı, APK cihaza kuruldu).
    - **Sonuç: Migration production-ready kabul edildi.** Sıradaki adımlara geçilebilir.
-4. ✅ **Kategori tam CRUD — kod tarafında tamamlandı (cihaz testi bekliyor):**
-   - **Repository katmanı:** `TaskRepository`'ye `isCategoryInUse(String categoryId)` eklendi (soyut arayüz + `HiveTaskRepository` implementasyonu). `CategoryRepository.renameCategory`/`deleteCategory` zaten hazırdı, değişmedi.
-   - **Provider katmanı:** `CategoryListNotifier.deleteCategory`, silmeden önce `taskRepositoryProvider` üzerinden çapraz kontrol yapıyor — kategori bir görev tarafından kullanılıyorsa `CategoryInUseException` fırlatıyor (kullanılmıyorsa siliniyor). `renameCategory` zaten hazırdı (FK sayesinde otomatik cascade — Task'lar `categoryId` üzerinden referans verdiği için ekstra güncelleme gerekmiyor).
-   - **UI katmanı:** Yeni `lib/features/categories/category_management_screen.dart` — kategori listesi, her satırda "✏️ yeniden adlandır" ve "🗑️ sil" butonu. Silme, `CategoryInUseException` yakalanıp SnackBar ile kullanıcıya gösteriliyor. `task_list_screen.dart`'ın AppBar'ına dişli ikonu eklendi → bu ekrana gidiyor (kullanıcı kararına uygun: ayrı sekme değil, AppBar butonu).
-   - **⏳ Sıradaki adım — cihaz testi (YENİ SOHBETTE BURADAN BAŞLA):**
-     - [ ] Rename: bir kategoriyi yeniden adlandır, görev listesindeki subtitle'da adın otomatik değiştiğini doğrula (FK cascade kanıtı).
-     - [ ] Delete (kullanımda değil): kullanılmayan bir kategoriyi sil, listeden kalktığını doğrula.
-     - [ ] Delete (kullanımda): bir göreve atanmış kategoriyi silmeyi dene, SnackBar hatası çıktığını ve kategori silinmediğini doğrula.
-     - [ ] `flutter run` ile tam derleme (hot reload değil — yeni dosya eklendi).
-   - Test checklist geçilirse: **Sonra: Task Update (düzenleme).** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak.
+4. ✅ **Kategori tam CRUD — kod tarafında tamamlandı VE cihazda doğrulandı:**
+   - **Repository katmanı:** Değişmedi — `CategoryRepository.renameCategory`/`deleteCategory` zaten hazırdı (migration aşamasından). `TaskRepository`'ye ayrı bir `isCategoryInUse` metodu **eklenmedi** — bunun yerine mevcut `getAllTasks()` kullanıldı (aşağıya bakın).
+   - **Provider katmanı:** `category_provider.dart`'a `DeleteCategoryResult` sınıfı eklendi (`.success()` / `.inUse(usageCount)` factory constructor'ları). `CategoryListNotifier.deleteCategory(id)`, silmeden önce `taskRepositoryProvider.getAllTasks()`'ı çekip `categoryId` eşleşen görev sayısını sayıyor; eşleşme varsa exception fırlatmak yerine `DeleteCategoryResult.inUse(count)` **döndürüyor** (UI try/catch yerine düz `if (!result.success)` ile ayırt ediyor). `renameCategory` değişmedi — FK sayesinde otomatik cascade.
+   - **UI katmanı:** Yeni `lib/features/categories/category_management_screen.dart` — kategori listesi, her satırda "✏️ yeniden adlandır" ve "🗑️ sil" butonu, silme öncesi onay dialogu. Silme reddedilirse (`!result.success`) SnackBar ile "Bu kategori N görev tarafından kullanılıyor, silinemez" mesajı gösteriliyor. `task_list_screen.dart`'ın AppBar'ına dişli ikonu eklendi → bu ekrana gidiyor (kullanıcı kararına uygun: ayrı sekme değil, AppBar butonu).
+   - **✅ Cihaz testi sonucu (25 Temmuz 2026):** Kullanıcı `flutter run` ile test etti, "herşey çalışıyor" onayı alındı — rename/delete/AppBar navigasyonu sorunsuz. **Sonuç: production-ready kabul edildi.**
+5. ✅ **Görev Detay Ekranı (plan dışı, kullanıcı isteğiyle eklendi):**
+   - Yeni `lib/features/tasks/task_detail_screen.dart` — bir görevin tüm alanlarını salt-okunur gösteriyor: durum, tarih & saat, kategori, tekrar tipi, açıklama (varsa), oluşturulma tarihi. Şu an sadece **inceleme** amaçlı, düzenleme yok (Task Update aşaması ayrı ele alınacak).
+   - `task_list_screen.dart`: **`CheckboxListTile` kaldırıldı**, yerine `leading`'de manuel `Checkbox` olan normal `ListTile` kullanıldı — çünkü bu Flutter sürümünde (3.32.2) `CheckboxListTile`'ın `onTap` parametresi yok (denenip derleme hatası alındı). Satırın geri kalanına dokunma artık `TaskDetailScreen`'i açıyor, checkbox'a dokunma sadece tamamlama durumunu değiştiriyor (checkbox kendi dokunma alanını ayrı yönetiyor, çakışma yok).
+   - Subtitle artık çok satırlı: tarih/saat, kategori adı (artık "..." ile kesilmiyor) ve varsa açıklama önizlemesi ayrı satırlarda.
+   - **⚠️ Not — kullanılmayan `Tekrar` alanı:** Detay ekranında "Tekrar" satırı `Task.repeat` (`RepeatType.none/daily/weekly/monthly`) alanını gösteriyor, ama bu alanı **ayarlayan hiçbir UI yok** — görev ekleme diyaloğunda tekrar seçici yok, alan her zaman varsayılan `none` kalıyor. Bilinçli olarak kaldırılmadı, ileride gerçek "tekrarlayan görev" özelliği eklenince buraya dönülecek. **Bkz. aşağıdaki "Kullanılmayan" listesi.**
+   - **✅ Cihaz testi:** Kullanıcı test etti, çalışıyor.
+6. **Sonraki adım (YENİ SOHBETTE BURADAN BAŞLA): Task Update (düzenleme).** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı; not: satıra dokunma artık detay ekranını açıyor, bu karar hâlâ geçerli ve çakışmıyor). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak. İstersen düzenle butonu hem liste satırına hem de `TaskDetailScreen`'e eklenebilir.
    - **En son: İstatistik ekranı** (tamamlanan/bekleyen görev sayıları, kategoriye göre dağılım — FK sayesinde bu kolaylaşacak).
 
 ## Çalışma Tarzı Tercihleri (yeni sohbette hatırlanacak)
@@ -129,6 +134,7 @@ lib/
 - ✅ `lib.rar` — silindi, repodan kalktığı doğrulandı.
 - `dizin_yarat.bat` — işlevi netleşmedi, projeye gerçekten gerekli mi kontrol edilecek.
 - Eski `categories` box'ı (`Box<String>`) — kategori-FK migration'ı sonrası kod tarafından artık kullanılmıyor (yerini `categories_v2` aldı), ama geri dönüş payı için hemen silinmedi. Migration'ın birkaç gerçek kullanımda stabil çalıştığı doğrulandıktan sonra hem bu box'ı silen hem de `category_fk_migration.dart` dosyasını kaldıran bir temizlik adımı atılacak.
+- ⚠️ **`Task.repeatType` / `RepeatType` enum — DİKKAT: bu, diğer maddelerin aksine silinecek bir öğe DEĞİL.** Model ve `task_detail_screen.dart`'ta gösteriliyor ama bu değeri ayarlayan hiçbir UI yok (görev ekleme diyaloğunda tekrar seçici yok), o yüzden şu an her görevde sabit "Yok" (`none`) görünüyor. Gelecekte gerçek "tekrarlayan görev" özelliği yapılacaksa buradan devam edilecek — buraya not düşüldü ki unutulmasın. Proje sonu temizliğinde kaldırılmayacak, aksine tamamlanması gereken bir özellik olarak değerlendirilecek.
 
 ## pubspec.yaml — Ana Bağımlılıklar
 
