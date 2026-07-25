@@ -121,6 +121,10 @@ lib/
 - Kod değişiklikleri çalışma dosyasında (bu ortamda) yazılıp zip/dosya olarak teslim ediliyor; **push işlemini kullanıcı kendisi yapıyor** (yazma erişimi yok, sadece public repo okuma erişimi var).
 - Debug `print()` satırlarına dokunulmuyor (yukarıdaki "Kod Stili" bölümüne bakın).
 - Kullanılmayan/temizlik bekleyen öğeler bir listede tutulup proje bitiminde toplu temizleniyor (yukarıdaki ilgili bölüme bakın).
+- **⚠️ Repo durumu kontrolü — GitHub'ın render edilmiş HTML sayfasına güvenilmeyecek:** Bir oturumda, GitHub'ın normal repo sayfası (`github.com/dev-gotto/zaman_yonetimi_app`) üzerinden okunan README içeriği önbellekten bayat çıktı — Kategori CRUD ve Görev Detay Ekranı gibi zaten tamamlanmış işler "henüz yapılmadı" gibi göründü. Bunun tekrarlanmaması için: yeni bir sohbette repo/README durumu kontrol edilirken **ham (raw) içerik** kullanılmalı, render edilmiş sayfa değil. Örnek yollar:
+  - `https://raw.githubusercontent.com/dev-gotto/zaman_yonetimi_app/main/README.md` (tek dosya için)
+  - `https://codeload.github.com/dev-gotto/zaman_yonetimi_app/tar.gz/refs/heads/main` (tüm repo ağacı için, tarball indirip açarak)
+  - Şüphe varsa ikisini karşılaştır; render edilmiş sayfadaki içerik ham içerikle çelişiyorsa ham içerik esas alınacak.
 
 ## Kod Stili / Kasıtlı Kararlar (henüz temizlenmeyecek)
 
