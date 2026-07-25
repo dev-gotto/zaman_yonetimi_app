@@ -98,10 +98,20 @@ lib/
      - [x] `flutter run` ile tam derleme yapıldı (Gradle build başarılı, APK cihaza kuruldu).
    - **Sonuç: Migration production-ready kabul edildi.** Sıradaki adımlara geçilebilir.
 4. ⏳ Sıradaki adımlar (henüz yapılmadı, plan netleşti — migration bitince sırayla yapılacak):
-   - **Task Update (düzenleme):** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak.
-   - **Kategori tam CRUD:** Yeniden adlandırma (rename — FK sayesinde otomatik cascade olacak) + silme (bir kategori herhangi bir görev tarafından kullanılıyorsa silinemeyecek, kullanım sayısı FK üzerinden kontrol edilecek).
-   - **"Kategorileri Yönet" ekranı:** `task_list_screen.dart`'ın AppBar'ına bir ayarlar/seçenekler ikonu eklenecek (sağ üstte, üç nokta veya dişli ikonu gibi), oradan bu yönetim ekranına gidilecek — kullanıcı kararı: ayrı bir sekme değil, AppBar'da bir buton.
-   - Bunlardan sonra: **İstatistik ekranı** (tamamlanan/bekleyen görev sayıları, kategoriye göre dağılım — FK sayesinde bu kolaylaşacak).
+   - **📍 SIRADA (üzerinde anlaşıldı, YENİ SOHBETTE BURADAN BAŞLA): Kategori tam CRUD.**
+     - Öncelik sırası nedeni: Rename işlemi FK migration'ını uçtan uca test edecek (kategori adı değiştiğinde görev listesinde otomatik yansıması, FK'nin gerçekten çalıştığının kanıtı olacak) — bunu migration bağlamı tazeyken yapmak tercih edildi. Task Update ise kategori sistemine bağımlı değil, ne zaman yapılsa fark etmez.
+     - Kapsam: Yeniden adlandırma (rename — FK sayesinde otomatik cascade olacak, `CategoryRepository.renameCategory` ve `CategoryListNotifier.renameCategory` zaten hazır) + silme (bir kategori herhangi bir görev tarafından kullanılıyorsa silinemeyecek — bu kontrol TaskRepository ile CategoryRepository arasında bir çapraz sorgu gerektiriyor, henüz yazılmadı).
+     - **"Kategorileri Yönet" ekranı:** `task_list_screen.dart`'ın AppBar'ına bir ayarlar/seçenekler ikonu eklenecek (sağ üstte, üç nokta veya dişli ikonu gibi), oradan bu yönetim ekranına gidilecek — kullanıcı kararı: ayrı bir sekme değil, AppBar'da bir buton.
+   - **Sonra: Task Update (düzenleme).** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak.
+   - **En son: İstatistik ekranı** (tamamlanan/bekleyen görev sayıları, kategoriye göre dağılım — FK sayesinde bu kolaylaşacak).
+
+## Çalışma Tarzı Tercihleri (yeni sohbette hatırlanacak)
+
+- Kod değişiklikleri **katman bazlı gruplanarak** ilerletiliyor: önce Model + Repository (data katmanı, migration dahil) bir arada tamamlanıyor, sonra Provider (controller), en son UI (view). Her katman kendi içinde bitirilip bir sonrakine geçiliyor.
+- Büyük/riskli işlerde (migration gibi) **önce yazılı plan sunulup onay alınıyor**, onaydan sonra kodlanıyor.
+- Kod değişiklikleri çalışma dosyasında (bu ortamda) yazılıp zip/dosya olarak teslim ediliyor; **push işlemini kullanıcı kendisi yapıyor** (yazma erişimi yok, sadece public repo okuma erişimi var).
+- Debug `print()` satırlarına dokunulmuyor (yukarıdaki "Kod Stili" bölümüne bakın).
+- Kullanılmayan/temizlik bekleyen öğeler bir listede tutulup proje bitiminde toplu temizleniyor (yukarıdaki ilgili bölüme bakın).
 
 ## Kod Stili / Kasıtlı Kararlar (henüz temizlenmeyecek)
 
