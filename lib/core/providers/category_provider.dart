@@ -22,11 +22,31 @@ class CategoryListNotifier extends AsyncNotifier<List<Category>> {
     state = AsyncValue.data(await repo.getAllCategories());
   }
 
+  /// Kategoriyi siler. Silmeden önce TaskRepository üzerinden bu kategoriyi
+  /// kullanan bir görev olup olmadığını kontrol eder (çapraz sorgu) —
+  /// varsa [CategoryInUseException] fırlatır, UI bunu yakalayıp kullanıcıya
+  /// gösterir.
   Future<void> deleteCategory(String id) async {
-    final repo = ref.read(categoryRepositoryProvider);
-    await repo.deleteCategory(id);
-    state = AsyncValue.data(await repo.getAllCategories());
+    final categoryRepo = ref.read(categoryRepositoryProvider);
+    final taskRepo = ref.read(taskRepositoryProvider);
+
+    final inUse = await taskRepo.isCategoryInUse(id);
+    if (inUse) {
+      throw CategoryInUseException();
+    }
+
+    await categoryRepo.deleteCategory(id);
+    state = AsyncValue.data(await categoryRepo.getAllCategories());
   }
+}
+
+/// deleteCategory bir görev tarafından kullanılan kategoriyi silmeye
+/// çalıştığında fırlatılır. UI bunu yakalayıp kullanıcı dostu bir mesaj
+/// gösterir (SnackBar vb.).
+class CategoryInUseException implements Exception {
+  @override
+  String toString() =>
+      'Bu kategori en az bir görev tarafından kullanıldığı için silinemez.';
 }
 
 final categoryListProvider =

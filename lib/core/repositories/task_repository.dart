@@ -8,4 +8,9 @@ abstract class TaskRepository {
   Future<void> updateTask(Task task);
   Future<void> deleteTask(String id);
   Future<void> toggleComplete(String id);
+
+  /// Bir kategori en az bir görev tarafından kullanılıyor mu?
+  /// CategoryListNotifier.deleteCategory bunu, silme öncesi kullanım
+  /// kontrolü (çapraz sorgu) için çağırır.
+  Future<bool> isCategoryInUse(String categoryId);
 }

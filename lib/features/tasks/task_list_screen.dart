@@ -6,6 +6,7 @@ import '../../core/models/category.dart';
 import '../../core/providers/task_provider.dart';
 import '../../core/providers/category_provider.dart';
 import '../timer/timer_screen.dart';
+import '../categories/category_management_screen.dart';
 
 class TaskListScreen extends ConsumerWidget {
   const TaskListScreen({super.key});
@@ -17,7 +18,23 @@ class TaskListScreen extends ConsumerWidget {
     final categoryById = ref.watch(categoryByIdProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Görevlerim')),
+      appBar: AppBar(
+        title: const Text('Görevlerim'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Kategorileri Yönet',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CategoryManagementScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: tasksAsync.when(
         data: (tasks) {
           if (tasks.isEmpty) {

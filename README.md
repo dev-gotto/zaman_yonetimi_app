@@ -97,11 +97,25 @@ lib/
      - [x] Yeni görev eklerken kategori dropdown'u ve "yeni kategori ekle" akışı sorunsuz çalıştı.
      - [x] `flutter run` ile tam derleme yapıldı (Gradle build başarılı, APK cihaza kuruldu).
    - **Sonuç: Migration production-ready kabul edildi.** Sıradaki adımlara geçilebilir.
-4. ⏳ Sıradaki adımlar (henüz yapılmadı, plan netleşti — migration bitince sırayla yapılacak):
-   - **Task Update (düzenleme):** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak.
-   - **Kategori tam CRUD:** Yeniden adlandırma (rename — FK sayesinde otomatik cascade olacak) + silme (bir kategori herhangi bir görev tarafından kullanılıyorsa silinemeyecek, kullanım sayısı FK üzerinden kontrol edilecek).
-   - **"Kategorileri Yönet" ekranı:** `task_list_screen.dart`'ın AppBar'ına bir ayarlar/seçenekler ikonu eklenecek (sağ üstte, üç nokta veya dişli ikonu gibi), oradan bu yönetim ekranına gidilecek — kullanıcı kararı: ayrı bir sekme değil, AppBar'da bir buton.
-   - Bunlardan sonra: **İstatistik ekranı** (tamamlanan/bekleyen görev sayıları, kategoriye göre dağılım — FK sayesinde bu kolaylaşacak).
+4. ✅ **Kategori tam CRUD — kod tarafında tamamlandı (cihaz testi bekliyor):**
+   - **Repository katmanı:** `TaskRepository`'ye `isCategoryInUse(String categoryId)` eklendi (soyut arayüz + `HiveTaskRepository` implementasyonu). `CategoryRepository.renameCategory`/`deleteCategory` zaten hazırdı, değişmedi.
+   - **Provider katmanı:** `CategoryListNotifier.deleteCategory`, silmeden önce `taskRepositoryProvider` üzerinden çapraz kontrol yapıyor — kategori bir görev tarafından kullanılıyorsa `CategoryInUseException` fırlatıyor (kullanılmıyorsa siliniyor). `renameCategory` zaten hazırdı (FK sayesinde otomatik cascade — Task'lar `categoryId` üzerinden referans verdiği için ekstra güncelleme gerekmiyor).
+   - **UI katmanı:** Yeni `lib/features/categories/category_management_screen.dart` — kategori listesi, her satırda "✏️ yeniden adlandır" ve "🗑️ sil" butonu. Silme, `CategoryInUseException` yakalanıp SnackBar ile kullanıcıya gösteriliyor. `task_list_screen.dart`'ın AppBar'ına dişli ikonu eklendi → bu ekrana gidiyor (kullanıcı kararına uygun: ayrı sekme değil, AppBar butonu).
+   - **⏳ Sıradaki adım — cihaz testi (YENİ SOHBETTE BURADAN BAŞLA):**
+     - [ ] Rename: bir kategoriyi yeniden adlandır, görev listesindeki subtitle'da adın otomatik değiştiğini doğrula (FK cascade kanıtı).
+     - [ ] Delete (kullanımda değil): kullanılmayan bir kategoriyi sil, listeden kalktığını doğrula.
+     - [ ] Delete (kullanımda): bir göreve atanmış kategoriyi silmeyi dene, SnackBar hatası çıktığını ve kategori silinmediğini doğrula.
+     - [ ] `flutter run` ile tam derleme (hot reload değil — yeni dosya eklendi).
+   - Test checklist geçilirse: **Sonra: Task Update (düzenleme).** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak.
+   - **En son: İstatistik ekranı** (tamamlanan/bekleyen görev sayıları, kategoriye göre dağılım — FK sayesinde bu kolaylaşacak).
+
+## Çalışma Tarzı Tercihleri (yeni sohbette hatırlanacak)
+
+- Kod değişiklikleri **katman bazlı gruplanarak** ilerletiliyor: önce Model + Repository (data katmanı, migration dahil) bir arada tamamlanıyor, sonra Provider (controller), en son UI (view). Her katman kendi içinde bitirilip bir sonrakine geçiliyor.
+- Büyük/riskli işlerde (migration gibi) **önce yazılı plan sunulup onay alınıyor**, onaydan sonra kodlanıyor.
+- Kod değişiklikleri çalışma dosyasında (bu ortamda) yazılıp zip/dosya olarak teslim ediliyor; **push işlemini kullanıcı kendisi yapıyor** (yazma erişimi yok, sadece public repo okuma erişimi var).
+- Debug `print()` satırlarına dokunulmuyor (yukarıdaki "Kod Stili" bölümüne bakın).
+- Kullanılmayan/temizlik bekleyen öğeler bir listede tutulup proje bitiminde toplu temizleniyor (yukarıdaki ilgili bölüme bakın).
 
 ## Kod Stili / Kasıtlı Kararlar (henüz temizlenmeyecek)
 

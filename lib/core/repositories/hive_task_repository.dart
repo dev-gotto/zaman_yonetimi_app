@@ -55,4 +55,9 @@ class HiveTaskRepository implements TaskRepository {
       await task.save();
     }
   }
+
+  @override
+  Future<bool> isCategoryInUse(String categoryId) async {
+    return _box.values.any((task) => task.categoryId == categoryId);
+  }
 }
