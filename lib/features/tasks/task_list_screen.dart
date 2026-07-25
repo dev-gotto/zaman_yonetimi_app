@@ -7,6 +7,7 @@ import '../../core/providers/task_provider.dart';
 import '../../core/providers/category_provider.dart';
 import '../timer/timer_screen.dart';
 import '../categories/category_management_screen.dart';
+import 'task_detail_screen.dart';
 
 class TaskListScreen extends ConsumerWidget {
   const TaskListScreen({super.key});
@@ -56,6 +57,14 @@ class TaskListScreen extends ConsumerWidget {
                   onChanged: (_) {
                     ref.read(taskListProvider.notifier).toggleComplete(task.id);
                   },
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TaskDetailScreen(task: task),
+                      ),
+                    );
+                  },
                   title: Text(
                     task.title,
                     maxLines: 1,
@@ -66,13 +75,32 @@ class TaskListScreen extends ConsumerWidget {
                           : null,
                     ),
                   ),
-                  subtitle: Text(
-                    '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year} '
-                    '${task.dueDate.hour.toString().padLeft(2, '0')}:'
-                    '${task.dueDate.minute.toString().padLeft(2, '0')} • '
-                    '${categoryById[task.categoryId]?.name ?? "Bilinmeyen kategori"}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year} '
+                        '${task.dueDate.hour.toString().padLeft(2, '0')}:'
+                        '${task.dueDate.minute.toString().padLeft(2, '0')}',
+                      ),
+                      Text(
+                        // Kategori adı artık tam gösteriliyor (ellipsis yok) —
+                        // liste ekranında kesilerek okunamaz hale gelmesin diye.
+                        categoryById[task.categoryId]?.name ??
+                            'Bilinmeyen kategori',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (task.description != null &&
+                          task.description!.trim().isNotEmpty)
+                        Text(
+                          task.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
                   ),
                   secondary: IconButton(
                     icon: const Icon(Icons.play_circle_outline),
