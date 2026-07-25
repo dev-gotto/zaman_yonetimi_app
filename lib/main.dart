@@ -66,28 +66,51 @@ class _HomeShell extends StatefulWidget {
   State<_HomeShell> createState() => _HomeShellState();
 }
 
+/// Her tab başlık+ikon+ekranı TEK nesnede taşıyor (bkz.
+/// settings_menu_screen.dart'taki aynı prensip). Önceki halde ekranlar
+/// (_screens) ve BottomNavigationBarItem'lar (ikon+etiket) iki AYRI
+/// listede tutuluyor, index üzerinden eşleşiyordu — biri güncellenip
+/// diğeri unutulursa sessizce yanlış eşleşme oluşabilirdi. Tek liste bu
+/// riski ortadan kaldırıyor.
+class _HomeTab {
+  final String label;
+  final IconData icon;
+  final Widget screen;
+
+  const _HomeTab({
+    required this.label,
+    required this.icon,
+    required this.screen,
+  });
+}
+
 class _HomeShellState extends State<_HomeShell> {
   int _currentIndex = 0;
 
-  static const _screens = [TaskListScreen(), CalendarScreen(), TimerScreen()];
+  static const _tabs = [
+    _HomeTab(
+      label: 'Görevler',
+      icon: Icons.checklist,
+      screen: TaskListScreen(),
+    ),
+    _HomeTab(
+      label: 'Takvim',
+      icon: Icons.calendar_month,
+      screen: CalendarScreen(),
+    ),
+    _HomeTab(label: 'Sayaç', icon: Icons.timer, screen: TimerScreen()),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: _tabs[_currentIndex].screen,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.checklist),
-            label: 'Görevler',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month),
-            label: 'Takvim',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'Sayaç'),
+        items: [
+          for (final tab in _tabs)
+            BottomNavigationBarItem(icon: Icon(tab.icon), label: tab.label),
         ],
       ),
     );

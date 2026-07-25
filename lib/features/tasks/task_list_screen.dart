@@ -6,7 +6,7 @@ import '../../core/models/category.dart';
 import '../../core/providers/task_provider.dart';
 import '../../core/providers/category_provider.dart';
 import '../timer/timer_screen.dart';
-import '../categories/category_management_screen.dart';
+import '../settings/settings_menu_screen.dart';
 import 'task_detail_screen.dart';
 
 class TaskListScreen extends ConsumerWidget {
@@ -24,12 +24,12 @@ class TaskListScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Kategorileri Yönet',
+            tooltip: 'Ayarlar',
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const CategoryManagementScreen(),
+                  builder: (context) => const SettingsMenuScreen(),
                 ),
               );
             },

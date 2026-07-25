@@ -34,14 +34,18 @@ lib/
   core/
     models/
       task.dart, task.g.dart
+      category.dart, category.g.dart
     providers/
       task_provider.dart
       category_provider.dart
       repository_provider.dart
       timer_provider.dart
+      stats_provider.dart
     repositories/
       task_repository.dart, hive_task_repository.dart
       category_repository.dart, hive_category_repository.dart
+    migration/
+      category_fk_migration.dart
     services/
       notification_service.dart
   features/
@@ -50,6 +54,10 @@ lib/
       task_detail_screen.dart
     categories/
       category_management_screen.dart
+    settings/
+      settings_menu_screen.dart
+    stats/
+      stats_screen.dart
     calendar/
       calendar_screen.dart
     timer/
@@ -118,16 +126,26 @@ lib/
    - Her görev satırına ayrı bir "✏️ düzenle" `IconButton`'ı eklendi (satıra dokunma hâlâ `TaskDetailScreen`'i açıyor, çakışma yok — trailing artık iki buton içeren bir `Row`: düzenle + sayaç).
    - **Küçük perf notu:** Diyalog kapandığında `titleController.dispose()` çağrısı eklendi (`showDialog(...).then(...)`) — sık açılıp kapanan bir widget olduğu için controller sızıntısını önlemek adına.
    - **Bilinen kapsam dışı bırakma:** Düzenleme diyaloğu, ekleme diyaloğuyla aynı kapsamda (başlık/tarih/saat/kategori) tutuldu — `description`/`repeatType` için UI hâlâ yok (bkz. "Kullanılmayan" listesindeki `RepeatType` notu, hâlâ geçerli).
-   - **⏳ Cihaz testi bekleniyor** — kod tarafı tamamlandı ama henüz `flutter run` ile gerçek cihazda doğrulanmadı. Yeni bir sohbette buradan devam edilecekse önce bunu test et.
-7. **Sonraki adım (test sonrası, YENİ SOHBETTE BURADAN BAŞLA): İstatistik ekranı** (tamamlanan/bekleyen görev sayıları, kategoriye göre dağılım — FK sayesinde bu kolaylaşacak).
+   - **✅ Cihaz testi sonucu (25 Temmuz 2026, `flutter run` ile):** Kullanıcı test etti — konsolda `GUNCELLE BUTONUNA BASILDI` → `GOREV GUNCELLENIYOR` → `scheduleTaskNotification CAGRILDI` → `zonedSchedule BASARIYLA cagrildi` → `updateTask BASARIYLA TAMAMLANDI` akışı sorunsuz tamamlandı, yeni `dueDate`'e göre bildirim doğru şekilde yeniden planlandı. **Sonuç: Task Update production-ready kabul edildi.**
+7. ✅ **İstatistik ekranı + Ayarlar menüsü + yapısal refactor — kod tarafında tamamlandı:**
+   - **Provider (`lib/core/providers/stats_provider.dart`, yeni):** `taskStatsProvider` — toplam/tamamlanan/bekleyen sayıları ve kategoriye göre dağılımı (`Map<categoryId, count>`) `taskListProvider` üzerinden **tek geçişte (O(N))** hesaplıyor. Düz bir `Provider` (AsyncNotifier değil), Riverpod bağımlılığı değişmediği sürece sonucu otomatik önbellekte tutuyor.
+   - **UI (`lib/features/stats/stats_screen.dart`, yeni):** 3 özet kart (Toplam/Tamamlanan/Bekleyen) + kategoriye göre dağılım listesi. Kasıtlı olarak sade (bkz. Çalışma Tarzı Tercihleri — UI cilalaması sona bırakılıyor).
+   - **Ayarlar menüsü (`lib/features/settings/settings_menu_screen.dart`, yeni):** AppBar'daki ⚙️ ikonu artık doğrudan Kategori Yönetimi'ne değil, önce bu menüye gidiyor. Menü öğeleri ("Kategorileri Yönet", "İstatistikler") veri-odaklı bir liste (`_SettingsMenuItem`) olarak tanımlı — yeni bir ayarlar/araç ekranı eklemek listeye tek satır eklemek demek, `build()`'e dokunmaya gerek yok. Kullanıcı kararı: AppBar'da ayrı ayrı ikonlar yerine tek giriş noktası (bkz. aşağıdaki "Veri-odaklı config" konvansiyonu).
+   - **`main.dart` refactor (yapısal, davranış değişmedi):** `_HomeShellState`'teki sekmeler önceden iki paralel dizide tutuluyordu (`_screens` ekran listesi + ayrı `BottomNavigationBarItem` listesi, index üzerinden eşleşiyordu — biri güncellenip diğeri unutulursa sessiz hata riski vardı). Artık tek bir `_HomeTab` (label+icon+screen) listesi var, aynı veri-odaklı config prensibiyle.
+   - **`task_list_screen.dart`:** AppBar bağlantısı `CategoryManagementScreen`'den `SettingsMenuScreen`'e güncellendi, tooltip "Ayarlar" oldu.
+   - **⏳ Cihaz testi bekleniyor** — kod tarafı tamamlandı ama henüz `flutter run` ile doğrulanmadı: Ayarlar → Kategorileri Yönet / İstatistikler navigasyonu, istatistik sayılarının doğruluğu, 3 sekmenin (Görevler/Takvim/Sayaç) hâlâ doğru çalıştığı test edilmeli.
+8. **Sonraki adım (test sonrası, YENİ SOHBETTE BURADAN BAŞLA):** Proje roadmap'indeki tüm ana aşamalar tamamlandı. Sıradaki iş kullanıcıyla birlikte belirlenecek — adaylar: UI cilalaması (bkz. "Kullanılmayan" listesindeki `RepeatType` notu — gerçek tekrarlayan görev özelliği), debug print temizliği, ya da yeni bir özellik.
 
 ## Çalışma Tarzı Tercihleri (yeni sohbette hatırlanacak)
 
 - Kod değişiklikleri **katman bazlı gruplanarak** ilerletiliyor: önce Model + Repository (data katmanı, migration dahil) bir arada tamamlanıyor, sonra Provider (controller), en son UI (view). Her katman kendi içinde bitirilip bir sonrakine geçiliyor.
 - Büyük/riskli işlerde (migration gibi) **önce yazılı plan sunulup onay alınıyor**, onaydan sonra kodlanıyor.
 - Kod değişiklikleri çalışma dosyasında (bu ortamda) yazılıp zip/dosya olarak teslim ediliyor; **push işlemini kullanıcı kendisi yapıyor** (yazma erişimi yok, sadece public repo okuma erişimi var).
+- **⚠️ Teslim biçimi — birden fazla dosya değiştiyse tek tek değil, dizin yapısını koruyan TEK bir zip halinde verilecek:** Bir seferinde değişen dosyalar (`README.md`, `lib/core/...`, `lib/features/...`) ayrı ayrı sunulmuştu; kullanıcı arayüzü bunları indirirken hepsini düz (klasörsüz) tek bir `files.zip`'e paketleyince kullanıcı yanlışlıkla hepsini proje köküne çıkarmış, dosyalar `lib/...` altına gitmemiş. Bunun tekrarlanmaması için: birden fazla dosya değiştiğinde, önce doğru göreli yol yapısıyla (`lib/core/repositories/...`, `lib/core/providers/...` vb.) bir klasör ağacı kurulacak, sonra bu ağaç tek bir zip'e paketlenip öyle teslim edilecek — kullanıcı zip'i proje köküne çıkarınca dosyalar otomatik doğru yerlere gitsin. Tek dosya değiştiyse (örn. sadece README) doğrudan o dosya yeterli, zip'e gerek yok.
 - Debug `print()` satırlarına dokunulmuyor (yukarıdaki "Kod Stili" bölümüne bakın).
 - Kullanılmayan/temizlik bekleyen öğeler bir listede tutulup proje bitiminde toplu temizleniyor (yukarıdaki ilgili bölüme bakın).
+- **Performans ve yapı önce, UI cilalaması en sona:** Katman bazlı ilerlerken UI'ı bilinçli olarak en son ve en sade haliyle bırakıyoruz (`category_management_screen.dart` ve `stats_screen.dart`'taki "kasıtlı olarak sade tutuldu" notları bunun içindir). Öncelik sırası: (1) veri/repository katmanının doğruluğu, (2) performans (gereksiz native çağrı / gereksiz O(N) tarama gibi maliyetlerden kaçınmak — bkz. `stats_provider.dart`'taki tek geçiş hesaplama, `task_provider.dart`'taki koşullu bildirim yeniden planlama), (3) yapısal sağlamlık (bkz. aşağıdaki veri-odaklı config maddesi), (4) en son görsel/UX cilalaması. Yeni bir özellik önerilirken de bu sırayla yaklaşılacak.
+- **Veri-odaklı config, paralel dizi/hardcode yerine:** Birden fazla benzer öğe (menü satırları, sekmeler, vb.) tanımlanırken, ilgili alanlar (başlık+ikon+hedef gibi) TEK bir veri nesnesinde ("çocuk nesne") birleştirilip bir liste üzerinden `.map()`/`ListView.builder`/`for` ile render ediliyor — birbirinden bağımsız güncellenebilen paralel diziler (ör. eskiden `main.dart`'taki ayrı `_screens` ve `BottomNavigationBarItem` listeleri, index üzerinden sessizce senkron kalması gereken) kullanılmıyor. Örnekler: `settings_menu_screen.dart`'taki `_SettingsMenuItem` listesi, `main.dart`'taki `_HomeTab` listesi. Yeni bir menü/sekme/liste eklerken bu pattern'e uyulacak.
 - **⚠️ Repo durumu kontrolü — GitHub'ın render edilmiş HTML sayfasına güvenilmeyecek:** Bir oturumda, GitHub'ın normal repo sayfası (`github.com/dev-gotto/zaman_yonetimi_app`) üzerinden okunan README içeriği önbellekten bayat çıktı — Kategori CRUD ve Görev Detay Ekranı gibi zaten tamamlanmış işler "henüz yapılmadı" gibi göründü. Bunun tekrarlanmaması için: yeni bir sohbette repo/README durumu kontrol edilirken **ham (raw) içerik** kullanılmalı, render edilmiş sayfa değil. Örnek yollar:
   - `https://raw.githubusercontent.com/dev-gotto/zaman_yonetimi_app/main/README.md` (tek dosya için)
   - `https://codeload.github.com/dev-gotto/zaman_yonetimi_app/tar.gz/refs/heads/main` (tüm repo ağacı için, tarball indirip açarak)
