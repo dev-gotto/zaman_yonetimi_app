@@ -1,6 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/category.dart';
 import 'repository_provider.dart';
+import 'task_provider.dart';
+
+/// deleteCategory çağrısının sonucunu UI'ya taşımak için basit bir sonuç
+/// tipi. Exception yerine bunu tercih ettik çünkü "kategori kullanımda"
+/// durumu bir hata değil, beklenen bir iş kuralı — UI bunu try/catch yerine
+/// düz bir if ile ayırt edebilsin istedik.
+class DeleteCategoryResult {
+  final bool success;
+  final int usageCount;
+
+  const DeleteCategoryResult.success() : success = true, usageCount = 0;
+  const DeleteCategoryResult.inUse(this.usageCount) : success = false;
+}
 
 class CategoryListNotifier extends AsyncNotifier<List<Category>> {
   @override
@@ -22,31 +35,25 @@ class CategoryListNotifier extends AsyncNotifier<List<Category>> {
     state = AsyncValue.data(await repo.getAllCategories());
   }
 
-  /// Kategoriyi siler. Silmeden önce TaskRepository üzerinden bu kategoriyi
-  /// kullanan bir görev olup olmadığını kontrol eder (çapraz sorgu) —
-  /// varsa [CategoryInUseException] fırlatır, UI bunu yakalayıp kullanıcıya
-  /// gösterir.
-  Future<void> deleteCategory(String id) async {
-    final categoryRepo = ref.read(categoryRepositoryProvider);
+  /// Kategoriyi siler — ANCAK önce TaskRepository üzerinden bu kategoriyi
+  /// kullanan bir görev olup olmadığını kontrol eder. Bu çapraz kontrol
+  /// kasıtlı olarak burada (provider katmanında) duruyor: CategoryRepository
+  /// sadece kendi verisinden sorumlu, TaskRepository'yi bilmiyor — README'de
+  /// planlandığı gibi.
+  Future<DeleteCategoryResult> deleteCategory(String id) async {
     final taskRepo = ref.read(taskRepositoryProvider);
+    final allTasks = await taskRepo.getAllTasks();
+    final usageCount = allTasks.where((t) => t.categoryId == id).length;
 
-    final inUse = await taskRepo.isCategoryInUse(id);
-    if (inUse) {
-      throw CategoryInUseException();
+    if (usageCount > 0) {
+      return DeleteCategoryResult.inUse(usageCount);
     }
 
-    await categoryRepo.deleteCategory(id);
-    state = AsyncValue.data(await categoryRepo.getAllCategories());
+    final repo = ref.read(categoryRepositoryProvider);
+    await repo.deleteCategory(id);
+    state = AsyncValue.data(await repo.getAllCategories());
+    return const DeleteCategoryResult.success();
   }
-}
-
-/// deleteCategory bir görev tarafından kullanılan kategoriyi silmeye
-/// çalıştığında fırlatılır. UI bunu yakalayıp kullanıcı dostu bir mesaj
-/// gösterir (SnackBar vb.).
-class CategoryInUseException implements Exception {
-  @override
-  String toString() =>
-      'Bu kategori en az bir görev tarafından kullanıldığı için silinemez.';
 }
 
 final categoryListProvider =

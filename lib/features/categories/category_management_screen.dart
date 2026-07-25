@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/category.dart';
 import '../../core/providers/category_provider.dart';
 
-/// Kategori tam CRUD'ın UI katmanı: mevcut kategorileri listeler,
-/// yeniden adlandırma (rename — FK sayesinde otomatik cascade) ve
-/// silme (kullanımdaki kategori silinemez) işlemlerini sağlar.
+/// Kategori tam CRUD ekranı — rename ve delete burada.
+/// Kasıtlı olarak sade tutuldu (proje sonunda UI cilalaması ayrıca
+/// yapılacak, bkz. README "Çalışma Tarzı Tercihleri").
 class CategoryManagementScreen extends ConsumerWidget {
   const CategoryManagementScreen({super.key});
 
@@ -32,14 +32,12 @@ class CategoryManagementScreen extends ConsumerWidget {
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
                       tooltip: 'Yeniden adlandır',
-                      onPressed: () =>
-                          _showRenameDialog(context, ref, category),
+                      onPressed: () => _showRenameDialog(context, ref, category),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline),
                       tooltip: 'Sil',
-                      onPressed: () =>
-                          _confirmAndDelete(context, ref, category),
+                      onPressed: () => _handleDelete(context, ref, category),
                     ),
                   ],
                 ),
@@ -50,20 +48,19 @@ class CategoryManagementScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Hata: $err')),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddDialog(context, ref),
+        child: const Icon(Icons.add),
+      ),
     );
   }
 
-  Future<void> _showRenameDialog(
-    BuildContext context,
-    WidgetRef ref,
-    Category category,
-  ) async {
-    final controller = TextEditingController(text: category.name);
-
-    final newName = await showDialog<String>(
+  void _showAddDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Kategoriyi Yeniden Adlandır'),
+        title: const Text('Yeni Kategori'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -75,23 +72,56 @@ class CategoryManagementScreen extends ConsumerWidget {
             child: const Text('İptal'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              await ref.read(categoryListProvider.notifier).addCategory(name);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Ekle'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRenameDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Category category,
+  ) {
+    final controller = TextEditingController(text: category.name);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Yeniden Adlandır'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Kategori adı'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isEmpty) return;
+              await ref
+                  .read(categoryListProvider.notifier)
+                  .renameCategory(category.id, newName);
+              if (context.mounted) Navigator.pop(context);
+            },
             child: const Text('Kaydet'),
           ),
         ],
       ),
     );
-
-    if (newName == null || newName.isEmpty || newName == category.name) {
-      return;
-    }
-
-    await ref
-        .read(categoryListProvider.notifier)
-        .renameCategory(category.id, newName);
   }
 
-  Future<void> _confirmAndDelete(
+  Future<void> _handleDelete(
     BuildContext context,
     WidgetRef ref,
     Category category,
@@ -100,19 +130,13 @@ class CategoryManagementScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Kategoriyi Sil'),
-        content: Text(
-          '"${category.name}" kategorisini silmek istediğinize emin misiniz?',
-        ),
+        content: Text('"${category.name}" kategorisini silmek istiyor musun?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('İptal'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Sil'),
           ),
@@ -121,17 +145,22 @@ class CategoryManagementScreen extends ConsumerWidget {
     );
 
     if (confirmed != true) return;
+
+    final result = await ref
+        .read(categoryListProvider.notifier)
+        .deleteCategory(category.id);
+
     if (!context.mounted) return;
 
-    try {
-      await ref
-          .read(categoryListProvider.notifier)
-          .deleteCategory(category.id);
-    } on CategoryInUseException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Bu kategori ${result.usageCount} görev tarafından kullanılıyor, '
+            'silinemez.',
+          ),
+        ),
+      );
     }
   }
 }
