@@ -78,11 +78,23 @@ lib/
    - `repository_provider.dart`'a `categoryRepositoryProvider` eklendi.
    - `main.dart`'ta kategori repository'si de init ediliyor.
    - `task_list_screen.dart`'taki görev ekleme diyaloğuna kategori dropdown + "yeni kategori ekle" butonu eklendi, seçilen kategori göreve kaydediliyor.
-3. ⚠️ **AKTİF İŞ — Kategori-FK Migration (şu an üzerinde çalışılıyor):**
-   - **Sorun:** `Task.category` alanı düz `String` olarak saklanıyor, kategori tablosuyla ID bazlı (FK) ilişkisi yok. Kategori yeniden adlandırıldığında bu değişiklik görevlere otomatik yansımıyor.
-   - **Karar:** `Category` modeli kendi `id`'sine sahip olacak (Task modeli gibi, yeni `@HiveType`, `typeId: 1`). `Task.category` (String) yerine `Task.categoryId` (String, FK → `Category.id`) kullanılacak.
-   - **Migration riski:** Mevcut `HiveCategoryRepository`'de kategoriler düz string olarak `Box<String>` içinde tutuluyor, ID yok. Bu, ID'li `Category` modeline dönüştürülecek. `Task.category` (String) alanı `Task.categoryId` (String, FK) olacak — **var olan Hive verisiyle uyumluluk (migration) gerektiriyor, dikkatli yapılmalı** (aşağıdaki "Migration Planı" bölümüne bakın).
-   - Detaylı adım adım plan bu dosyanın en altındaki "Kategori-FK Migration Planı" bölümünde.
+3. ✅ **Kategori-FK Migration — kod tarafında tamamlandı, cihazda test bekliyor:**
+   - `Category` modeli eklendi (`lib/core/models/category.dart` + `category.g.dart`, `typeId: 1`).
+   - `Task.category` (String) → `Task.categoryId` (String, FK) oldu. Alan numarası (`@HiveField(6)`) kasıtlı olarak değiştirilmedi — eski binary veriyle uyumluluk için.
+   - `CategoryRepository` arayüzü genişledi: `addCategory` artık `Category` döner, ayrıca `getCategoryById`, `renameCategory`, `deleteCategory` eklendi (rename/delete'in UI'ı henüz yok, altyapı hazır).
+   - `HiveCategoryRepository` artık `categories_v2` box'ında (`Box<Category>`) çalışıyor. Eski `categories` box'ı (`Box<String>`) hâlâ diskte ama artık kullanılmıyor.
+   - **Migration mantığı** yeni bir dosyada: `lib/core/migration/category_fk_migration.dart` → `CategoryFkMigration.runIfNeeded()`. `main.dart`'ta repository init'lerinden ÖNCE çağrılıyor. Tek seferlik çalışır (`meta` box'ında `migrated_v2` flag'i ile korunuyor), eski kategori isimlerini yeni ID'li `Category` kayıtlarına çevirir ve mevcut görevlerin `categoryId` alanını günceller. Eşleşmeyen (orphan) görevler dokunulmadan bırakılıp loglanıyor.
+   - `category_provider.dart` artık `List<Category>` state tutuyor; ayrıca `categoryByIdProvider` eklendi (UI'da `categoryId` → isim lookup için).
+   - `task_list_screen.dart` güncellendi: dropdown artık kategori id'si üzerinden çalışıyor, görev satırındaki alt metinde kategori adı `categoryByIdProvider` ile gösteriliyor.
+   - **⚠️ Önemli — build_runner:** `category.g.dart` bu ortamda `build_runner` çalıştırılamadığı için `task.g.dart`'taki pattern birebir takip edilerek elle yazıldı. Projeyi çektikten sonra bir fırsatta şunu çalıştırıp dosyanın gerçek codegen çıktısıyla eşleştiğini doğrulaman önerilir:
+     ```
+     flutter pub run build_runner build --delete-conflicting-outputs
+     ```
+   - **Test checklist (cihazda/emülatörde doğrulanacak):**
+     - [ ] Var olan (migration öncesi) görevlerle uygulama açılıyor, görevler eski kategorileriyle doğru görünüyor mu?
+     - [ ] Konsolda `[CategoryFkMigration]` logları migration'ın bir kez çalıştığını, ikinci açılışta "zaten migrate edilmiş" dediğini gösteriyor mu?
+     - [ ] Yeni görev eklerken kategori dropdown'u ve "yeni kategori ekle" akışı çalışıyor mu?
+     - [ ] `flutter run` ile tam derleme yapıldı mı (yeni Hive tipi eklendiği için hot reload yetmez)?
 4. ⏳ Sıradaki adımlar (henüz yapılmadı, plan netleşti — migration bitince sırayla yapılacak):
    - **Task Update (düzenleme):** Her görev satırına ayrı bir "✏️ düzenle" ikonu/butonu eklenecek (satıra dokunma değil, ayrı buton — kullanıcı kararı). Mevcut "Yeni Görev" diyaloğu yeniden kullanılacak, alanlar mevcut değerlerle dolu gelecek, "Güncelle" butonu olacak.
    - **Kategori tam CRUD:** Yeniden adlandırma (rename — FK sayesinde otomatik cascade olacak) + silme (bir kategori herhangi bir görev tarafından kullanılıyorsa silinemeyecek, kullanım sayısı FK üzerinden kontrol edilecek).
@@ -98,9 +110,9 @@ lib/
 
 > Proje bitiminde topluca gözden geçirilecek liste. Yeni bir şey fark edildikçe buraya eklenecek.
 
-- `lib.rar` — eski/yedek bir `lib/` klasörü arşivi, repo kökünde duruyor. Kullanıcı tarafından local'de silindi ancak henüz commit/push edilmedi — bir sonraki push'ta repodan kalkması gerekiyor.
+- ✅ `lib.rar` — silindi, repodan kalktığı doğrulandı.
 - `dizin_yarat.bat` — işlevi netleşmedi, projeye gerçekten gerekli mi kontrol edilecek.
-- (Migration sonrası) Eski `categories` box'ı (`Box<String>`) — yeni ID'li box'a geçişten sonra kod tarafından kullanılmayacak ama geri dönüş payı için hemen silinmeyecek, migration stabil olduğu doğrulandıktan sonra kaldırılacak.
+- Eski `categories` box'ı (`Box<String>`) — kategori-FK migration'ı sonrası kod tarafından artık kullanılmıyor (yerini `categories_v2` aldı), ama geri dönüş payı için hemen silinmedi. Migration'ın birkaç gerçek kullanımda stabil çalıştığı doğrulandıktan sonra hem bu box'ı silen hem de `category_fk_migration.dart` dosyasını kaldıran bir temizlik adımı atılacak.
 
 ## pubspec.yaml — Ana Bağımlılıklar
 
@@ -122,7 +134,9 @@ dev:
 
 ---
 
-## Kategori-FK Migration Planı (aktif iş — detaylı)
+## Kategori-FK Migration Planı (✅ uygulandı — referans için saklanıyor)
+
+> Bu bölüm, migration'ın nasıl planlandığını ve hangi sırayla uygulandığını gösteriyor. Kod tarafında tamamlandı; kalan iş yukarıdaki "Test checklist" maddeleri.
 
 **Hedef:** `Task.category` (String) → `Task.categoryId` (String, FK), `Category` modeli kendi `id`'sine sahip olacak, rename otomatik cascade olacak.
 

@@ -23,7 +23,7 @@ class TaskAdapter extends TypeAdapter<Task> {
       dueDate: fields[3] as DateTime,
       isCompleted: fields[4] as bool,
       repeatType: fields[5] as int,
-      category: fields[6] as String,
+      categoryId: fields[6] as String,
       createdAt: fields[7] as DateTime?,
     );
   }
@@ -45,7 +45,7 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(5)
       ..write(obj.repeatType)
       ..writeByte(6)
-      ..write(obj.category)
+      ..write(obj.categoryId)
       ..writeByte(7)
       ..write(obj.createdAt);
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/task.dart';
+import '../../core/models/category.dart';
 import '../../core/providers/task_provider.dart';
 import '../../core/providers/category_provider.dart';
 import '../timer/timer_screen.dart';
@@ -13,6 +14,7 @@ class TaskListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tasksAsync = ref.watch(taskListProvider);
     final categoriesAsync = ref.watch(categoryListProvider);
+    final categoryById = ref.watch(categoryByIdProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Görevlerim')),
@@ -50,7 +52,8 @@ class TaskListScreen extends ConsumerWidget {
                   subtitle: Text(
                     '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year} '
                     '${task.dueDate.hour.toString().padLeft(2, '0')}:'
-                    '${task.dueDate.minute.toString().padLeft(2, '0')} • ${task.category}',
+                    '${task.dueDate.minute.toString().padLeft(2, '0')} • '
+                    '${categoryById[task.categoryId]?.name ?? "Bilinmeyen kategori"}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -78,7 +81,7 @@ class TaskListScreen extends ConsumerWidget {
         onPressed: () => _showAddTaskDialog(
           context,
           ref,
-          categoriesAsync.value ?? const ['Genel'],
+          categoriesAsync.value ?? const [],
         ),
         child: const Icon(Icons.add),
       ),
@@ -88,15 +91,17 @@ class TaskListScreen extends ConsumerWidget {
   void _showAddTaskDialog(
     BuildContext context,
     WidgetRef ref,
-    List<String> categories,
+    List<Category> categories,
   ) {
     final titleController = TextEditingController();
     DateTime selectedDate = DateTime.now();
     TimeOfDay selectedTime = TimeOfDay.now();
-    List<String> availableCategories = List.from(categories);
-    String selectedCategory = availableCategories.isNotEmpty
-        ? availableCategories.first
-        : 'Genel';
+    List<Category> availableCategories = List.from(categories);
+    // Dropdown artık kategori id'si üzerinden çalışıyor (FK), gösterimde
+    // Category.name kullanılıyor.
+    String? selectedCategoryId = availableCategories.isNotEmpty
+        ? availableCategories.first.id
+        : null;
 
     showDialog(
       context: context,
@@ -163,18 +168,19 @@ class TaskListScreen extends ConsumerWidget {
                   Expanded(
                     child: DropdownButton<String>(
                       isExpanded: true,
-                      value: selectedCategory,
+                      value: selectedCategoryId,
+                      hint: const Text('Kategori seç'),
                       items: availableCategories
                           .map(
                             (category) => DropdownMenuItem(
-                              value: category,
-                              child: Text(category),
+                              value: category.id,
+                              child: Text(category.name),
                             ),
                           )
                           .toList(),
                       onChanged: (value) {
                         if (value != null) {
-                          setState(() => selectedCategory = value);
+                          setState(() => selectedCategoryId = value);
                         }
                       },
                     ),
@@ -212,14 +218,16 @@ class TaskListScreen extends ConsumerWidget {
                       );
 
                       if (newCategory != null && newCategory.isNotEmpty) {
-                        await ref
+                        final createdCategory = await ref
                             .read(categoryListProvider.notifier)
                             .addCategory(newCategory);
                         setState(() {
-                          if (!availableCategories.contains(newCategory)) {
-                            availableCategories.add(newCategory);
+                          if (!availableCategories.any(
+                            (c) => c.id == createdCategory.id,
+                          )) {
+                            availableCategories.add(createdCategory);
                           }
-                          selectedCategory = newCategory;
+                          selectedCategoryId = createdCategory.id;
                         });
                       }
                     },
@@ -244,6 +252,12 @@ class TaskListScreen extends ConsumerWidget {
                   return;
                 }
 
+                if (selectedCategoryId == null) {
+                  // ignore: avoid_print
+                  print('### KATEGORI SECILMEDI, ISLEM DURDU ###');
+                  return;
+                }
+
                 final combinedDateTime = DateTime(
                   selectedDate.year,
                   selectedDate.month,
@@ -259,7 +273,7 @@ class TaskListScreen extends ConsumerWidget {
                   id: const Uuid().v4(),
                   title: titleController.text.trim(),
                   dueDate: combinedDateTime,
-                  category: selectedCategory,
+                  categoryId: selectedCategoryId!,
                 );
 
                 ref

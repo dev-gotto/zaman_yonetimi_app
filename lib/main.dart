@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/providers/repository_provider.dart';
+import 'core/migration/category_fk_migration.dart';
 import 'features/tasks/task_list_screen.dart';
 import 'features/calendar/calendar_screen.dart';
 import 'features/timer/timer_screen.dart';
@@ -35,11 +36,17 @@ class _AppInitializer extends ConsumerWidget {
     final notificationService = ref.read(notificationServiceProvider);
 
     return FutureBuilder(
-      future: Future.wait([
-        repo.init(),
-        categoryRepo.init(),
-        notificationService.init(),
-      ]),
+      // Kategori-FK migration, kategori/görev repository'leri init
+      // edilmeden ÖNCE tamamlanmalı — HiveCategoryRepository.init() box'ın
+      // boş olup olmadığına bakarak varsayılan kategori seed'lemesi
+      // yapıyor, migration'ın veriyi taşımış olması bu kararı etkiliyor.
+      future: CategoryFkMigration.runIfNeeded().then(
+        (_) => Future.wait([
+          repo.init(),
+          categoryRepo.init(),
+          notificationService.init(),
+        ]),
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(

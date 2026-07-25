@@ -24,8 +24,14 @@ class Task extends HiveObject {
   @HiveField(5)
   int repeatType; // RepeatType index olarak saklanır
 
+  // Kategori-FK migration: önceden düz kategori adı (String) tutuluyordu.
+  // Artık Category modelinin id'sine referans veriyor (FK). Alan numarası
+  // (6) kasıtlı olarak DEĞİŞTİRİLMEDİ — Hive alanları isme değil index'e
+  // göre okur/yazar, bu sayede eski binary veriyle geriye dönük uyumluluk
+  // korunuyor. Var olan görevlerdeki eski kategori adları, uygulama
+  // başlangıcında CategoryFkMigration tarafından gerçek id'lere çevriliyor.
   @HiveField(6)
-  String category;
+  String categoryId;
 
   @HiveField(7)
   DateTime createdAt;
@@ -37,7 +43,7 @@ class Task extends HiveObject {
     required this.dueDate,
     this.isCompleted = false,
     this.repeatType = 0,
-    this.category = 'Genel',
+    required this.categoryId,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
