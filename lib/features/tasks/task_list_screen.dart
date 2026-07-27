@@ -7,6 +7,7 @@ import '../../core/providers/task_provider.dart';
 import '../../core/providers/category_provider.dart';
 import '../timer/timer_screen.dart';
 import '../settings/settings_menu_screen.dart';
+import '../categories/category_name_dialog.dart';
 import 'task_detail_screen.dart';
 
 class TaskListScreen extends ConsumerWidget {
@@ -163,265 +164,310 @@ class TaskListScreen extends ConsumerWidget {
   // kaydetme taskListProvider.updateTask'i çağırır. Aynı diyaloğun hem
   // ekleme hem düzenleme için kullanılması, iki ayrı dialog'u senkron
   // tutma yükünü (performans + bakım açısından) ortadan kaldırıyor.
+  //
+  // Not (düzeltme, 28 Temmuz 2026): Bu diyalog önceden showDialog + harici
+  // bir TextEditingController + StatefulBuilder kombinasyonuyla yazılıyordu,
+  // controller'ın dispose()'u showDialog()'un döndürdüğü Future'a
+  // (`.then(...)`) bağlıydı. Görev güncellendiğinde dueDate değiştiği için
+  // liste yeniden sıralanıyor, bu da TaskListScreen'i (üst ağacı) tam
+  // diyalog kapanış animasyonu sürerken rebuild ediyordu — controller bazen
+  // bu rebuild tamamlanmadan disposed oluyor ve "TextEditingController was
+  // used after being disposed" + ardından gelen Element/build-scope
+  // assertion'larına yol açıyordu. Artık form içeriği kendi
+  // initState/dispose'una sahip bir StatefulWidget (_TaskFormDialog) —
+  // controller'ın ömrü widget'ın kendi yaşam döngüsüne (Element unmount
+  // sırasına) bağlı, dış bir Future zamanlamasına değil. Bu, yarış
+  // durumunu kökten ortadan kaldırıyor.
   void _showTaskDialog(
     BuildContext context,
     WidgetRef ref,
     List<Category> categories, {
     Task? existingTask,
   }) {
-    final isEditing = existingTask != null;
-    final titleController = TextEditingController(
-      text: existingTask?.title ?? '',
-    );
-    DateTime selectedDate = existingTask?.dueDate ?? DateTime.now();
-    TimeOfDay selectedTime = existingTask != null
-        ? TimeOfDay.fromDateTime(existingTask.dueDate)
-        : TimeOfDay.now();
-    List<Category> availableCategories = List.from(categories);
-    // Dropdown artık kategori id'si üzerinden çalışıyor (FK), gösterimde
-    // Category.name kullanılıyor.
-    String? selectedCategoryId =
-        existingTask?.categoryId ??
-        (availableCategories.isNotEmpty ? availableCategories.first.id : null);
-
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          scrollable: true,
-          title: Text(isEditing ? 'Görevi Düzenle' : 'Yeni Görev'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: 'Başlık'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Tarih: ${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.calendar_today),
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2030),
-                      );
-                      if (picked != null) {
-                        setState(() => selectedDate = picked);
-                      }
-                    },
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Saat: ${selectedTime.hour.toString().padLeft(2, '0')}:'
-                      '${selectedTime.minute.toString().padLeft(2, '0')}',
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.access_time),
-                    onPressed: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: selectedTime,
-                      );
-                      if (picked != null) {
-                        setState(() => selectedTime = picked);
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: selectedCategoryId,
-                      hint: const Text('Kategori seç'),
-                      items: availableCategories
-                          .map(
-                            (category) => DropdownMenuItem(
-                              value: category.id,
-                              child: Text(category.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => selectedCategoryId = value);
-                        }
-                      },
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    tooltip: 'Yeni kategori ekle',
-                    onPressed: () async {
-                      final newCategoryController = TextEditingController();
-                      final newCategory = await showDialog<String>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Yeni Kategori'),
-                          content: TextField(
-                            controller: newCategoryController,
-                            autofocus: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Kategori adı',
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('İptal'),
-                            ),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(
-                                context,
-                                newCategoryController.text.trim(),
-                              ),
-                              child: const Text('Ekle'),
-                            ),
-                          ],
-                        ),
-                      );
+      builder: (context) => _TaskFormDialog(
+        ref: ref,
+        categories: categories,
+        existingTask: existingTask,
+      ),
+    );
+  }
+}
 
-                      if (newCategory != null && newCategory.isNotEmpty) {
-                        final createdCategory = await ref
-                            .read(categoryListProvider.notifier)
-                            .addCategory(newCategory);
-                        setState(() {
-                          if (!availableCategories.any(
-                            (c) => c.id == createdCategory.id,
-                          )) {
-                            availableCategories.add(createdCategory);
-                          }
-                          selectedCategoryId = createdCategory.id;
-                        });
-                      }
-                    },
-                  ),
-                ],
+class _TaskFormDialog extends StatefulWidget {
+  final WidgetRef ref;
+  final List<Category> categories;
+  final Task? existingTask;
+
+  const _TaskFormDialog({
+    required this.ref,
+    required this.categories,
+    this.existingTask,
+  });
+
+  @override
+  State<_TaskFormDialog> createState() => _TaskFormDialogState();
+}
+
+class _TaskFormDialogState extends State<_TaskFormDialog> {
+  late final TextEditingController titleController;
+  late DateTime selectedDate;
+  late TimeOfDay selectedTime;
+  late List<Category> availableCategories;
+  String? selectedCategoryId;
+
+  bool get isEditing => widget.existingTask != null;
+
+  @override
+  void initState() {
+    super.initState();
+    titleController = TextEditingController(
+      text: widget.existingTask?.title ?? '',
+    );
+    selectedDate = widget.existingTask?.dueDate ?? DateTime.now();
+    selectedTime = widget.existingTask != null
+        ? TimeOfDay.fromDateTime(widget.existingTask!.dueDate)
+        : TimeOfDay.now();
+    // Dropdown kategori id'si üzerinden çalışıyor (FK), gösterimde
+    // Category.name kullanılıyor.
+    availableCategories = List.from(widget.categories);
+    selectedCategoryId =
+        widget.existingTask?.categoryId ??
+        (availableCategories.isNotEmpty ? availableCategories.first.id : null);
+  }
+
+  @override
+  void dispose() {
+    // Controller artık bu widget'ın kendi yaşam döngüsüne bağlı — dış bir
+    // Future'a (showDialog().then(...)) bağlı DEĞİL. Framework, bu dispose()
+    // çağrısını yalnızca widget gerçekten ağaçtan sökülürken tetikler, bu
+    // yüzden hâlâ bir rebuild bekleyen bir TextField'ın altından controller'ı
+    // çekme riski yok.
+    titleController.dispose();
+    super.dispose();
+  }
+
+  // Not (düzeltme, 28 Temmuz 2026): Bu, önceden kendi TextEditingController'ını
+  // tutup dispose()'unu bir try/finally ile "diyalog kapandıktan hemen sonra"
+  // çağırıyordu. Ama finally bloğu, addCategory() await'i VE ardından gelen
+  // setState() tamamlanana kadar bekliyordu — yani controller aslında
+  // diyalog kapandıktan bir süre sonra, dış bir async zincirin bitişine bağlı
+  // olarak disposed oluyordu. Bu tam olarak category_management_screen.dart
+  // ve önceki görev formu düzeltmesinde gördüğümüz aynı yarış durumu ailesi.
+  // Artık ortak CategoryNameDialog kullanılıyor (controller'ı kendi
+  // initState/dispose'una bağlı) — bkz. category_name_dialog.dart.
+  Future<void> _showAddCategoryDialog() async {
+    final createdCategory = await showDialog<Category>(
+      context: context,
+      builder: (context) => const CategoryNameDialog(
+        title: 'Yeni Kategori',
+        confirmLabel: 'Ekle',
+      ),
+    );
+
+    if (createdCategory != null && mounted) {
+      setState(() {
+        if (!availableCategories.any((c) => c.id == createdCategory.id)) {
+          availableCategories.add(createdCategory);
+        }
+        selectedCategoryId = createdCategory.id;
+      });
+    }
+  }
+
+  void _handleSubmit() {
+    // ignore: avoid_print
+    print(
+      isEditing
+          ? '### GUNCELLE BUTONUNA BASILDI ###'
+          : '### EKLE BUTONUNA BASILDI ###',
+    );
+
+    if (titleController.text.trim().isEmpty) {
+      // ignore: avoid_print
+      print('### BASLIK BOS, ISLEM DURDU ###');
+      return;
+    }
+
+    if (selectedCategoryId == null) {
+      // ignore: avoid_print
+      print('### KATEGORI SECILMEDI, ISLEM DURDU ###');
+      return;
+    }
+
+    final combinedDateTime = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      selectedTime.hour,
+      selectedTime.minute,
+    );
+
+    // ignore: avoid_print
+    print(
+      '### GOREV ${isEditing ? "GUNCELLENIYOR" : "OLUSTURULUYOR"}: '
+      'dueDate=$combinedDateTime ###',
+    );
+
+    final notifier = widget.ref.read(taskListProvider.notifier);
+    final existingTask = widget.existingTask;
+
+    if (isEditing && existingTask != null) {
+      // Düzenlemede sadece diyalogda gösterilen alanlar
+      // (başlık/tarih/saat/kategori) değişiyor. Diyalogda düzenlenmeyen
+      // alanları (description, repeatType, isCompleted, createdAt) mevcut
+      // görevden aynen koruyoruz — aksi halde örneğin tamamlanmış bir
+      // görevi düzenlemek onu yanlışlıkla "tamamlanmadı" durumuna geri
+      // döndürebilirdi.
+      final updatedTask = Task(
+        id: existingTask.id,
+        title: titleController.text.trim(),
+        description: existingTask.description,
+        dueDate: combinedDateTime,
+        isCompleted: existingTask.isCompleted,
+        repeatType: existingTask.repeatType,
+        categoryId: selectedCategoryId!,
+        createdAt: existingTask.createdAt,
+      );
+
+      notifier
+          .updateTask(updatedTask)
+          .then((_) {
+            // ignore: avoid_print
+            print('### updateTask BASARIYLA TAMAMLANDI ###');
+          })
+          .catchError((e, stack) {
+            // ignore: avoid_print
+            print('### updateTask HATA VERDI: $e ###');
+            // ignore: avoid_print
+            print(stack);
+          });
+    } else {
+      final task = Task(
+        id: const Uuid().v4(),
+        title: titleController.text.trim(),
+        dueDate: combinedDateTime,
+        categoryId: selectedCategoryId!,
+      );
+
+      notifier
+          .addTask(task)
+          .then((_) {
+            // ignore: avoid_print
+            print('### addTask BASARIYLA TAMAMLANDI ###');
+          })
+          .catchError((e, stack) {
+            // ignore: avoid_print
+            print('### addTask HATA VERDI: $e ###');
+            // ignore: avoid_print
+            print(stack);
+          });
+    }
+
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      title: Text(isEditing ? 'Görevi Düzenle' : 'Yeni Görev'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: titleController,
+            decoration: const InputDecoration(labelText: 'Başlık'),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Tarih: ${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.calendar_today),
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                  );
+                  if (picked != null) {
+                    setState(() => selectedDate = picked);
+                  }
+                },
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('İptal'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                // ignore: avoid_print
-                print(
-                  isEditing
-                      ? '### GUNCELLE BUTONUNA BASILDI ###'
-                      : '### EKLE BUTONUNA BASILDI ###',
-                );
-
-                if (titleController.text.trim().isEmpty) {
-                  // ignore: avoid_print
-                  print('### BASLIK BOS, ISLEM DURDU ###');
-                  return;
-                }
-
-                if (selectedCategoryId == null) {
-                  // ignore: avoid_print
-                  print('### KATEGORI SECILMEDI, ISLEM DURDU ###');
-                  return;
-                }
-
-                final combinedDateTime = DateTime(
-                  selectedDate.year,
-                  selectedDate.month,
-                  selectedDate.day,
-                  selectedTime.hour,
-                  selectedTime.minute,
-                );
-
-                // ignore: avoid_print
-                print(
-                  '### GOREV ${isEditing ? "GUNCELLENIYOR" : "OLUSTURULUYOR"}: '
-                  'dueDate=$combinedDateTime ###',
-                );
-
-                final notifier = ref.read(taskListProvider.notifier);
-
-                if (isEditing) {
-                  // Düzenlemede sadece diyalogda gösterilen alanlar
-                  // (başlık/tarih/saat/kategori) değişiyor. Diyalogda
-                  // düzenlenmeyen alanları (description, repeatType,
-                  // isCompleted, createdAt) mevcut görevden aynen koruyoruz —
-                  // aksi halde örneğin tamamlanmış bir görevi düzenlemek onu
-                  // yanlışlıkla "tamamlanmadı" durumuna geri döndürebilirdi.
-                  final updatedTask = Task(
-                    id: existingTask.id,
-                    title: titleController.text.trim(),
-                    description: existingTask.description,
-                    dueDate: combinedDateTime,
-                    isCompleted: existingTask.isCompleted,
-                    repeatType: existingTask.repeatType,
-                    categoryId: selectedCategoryId!,
-                    createdAt: existingTask.createdAt,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Saat: ${selectedTime.hour.toString().padLeft(2, '0')}:'
+                  '${selectedTime.minute.toString().padLeft(2, '0')}',
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.access_time),
+                onPressed: () async {
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: selectedTime,
                   );
-
-                  notifier
-                      .updateTask(updatedTask)
-                      .then((_) {
-                        // ignore: avoid_print
-                        print('### updateTask BASARIYLA TAMAMLANDI ###');
-                      })
-                      .catchError((e, stack) {
-                        // ignore: avoid_print
-                        print('### updateTask HATA VERDI: $e ###');
-                        // ignore: avoid_print
-                        print(stack);
-                      });
-                } else {
-                  final task = Task(
-                    id: const Uuid().v4(),
-                    title: titleController.text.trim(),
-                    dueDate: combinedDateTime,
-                    categoryId: selectedCategoryId!,
-                  );
-
-                  notifier
-                      .addTask(task)
-                      .then((_) {
-                        // ignore: avoid_print
-                        print('### addTask BASARIYLA TAMAMLANDI ###');
-                      })
-                      .catchError((e, stack) {
-                        // ignore: avoid_print
-                        print('### addTask HATA VERDI: $e ###');
-                        // ignore: avoid_print
-                        print(stack);
-                      });
-                }
-
-                Navigator.pop(context);
-              },
-              child: Text(isEditing ? 'Güncelle' : 'Ekle'),
-            ),
-          ],
-        ),
+                  if (picked != null) {
+                    setState(() => selectedTime = picked);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedCategoryId,
+                  hint: const Text('Kategori seç'),
+                  items: availableCategories
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category.id,
+                          child: Text(category.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => selectedCategoryId = value);
+                    }
+                  },
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline),
+                tooltip: 'Yeni kategori ekle',
+                onPressed: _showAddCategoryDialog,
+              ),
+            ],
+          ),
+        ],
       ),
-      // Performans/bellek notu: TextEditingController diyalog kapandıktan
-      // sonra elden çıkarılmazsa (dispose edilmezse) sızıntıya yol açar.
-      // Diyalog sık açılıp kapanan bir widget olduğu için (her görev
-      // ekleme/düzenlemede) bunu burada garanti altına alıyoruz.
-    ).then((_) => titleController.dispose());
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('İptal'),
+        ),
+        ElevatedButton(
+          onPressed: _handleSubmit,
+          child: Text(isEditing ? 'Güncelle' : 'Ekle'),
+        ),
+      ],
+    );
   }
 }

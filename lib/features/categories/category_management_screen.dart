@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/category.dart';
 import '../../core/providers/category_provider.dart';
+import 'category_name_dialog.dart';
 
 /// Kategori tam CRUD ekranı — rename ve delete burada.
 /// Kasıtlı olarak sade tutuldu (proje sonunda UI cilalaması ayrıca
@@ -32,7 +33,7 @@ class CategoryManagementScreen extends ConsumerWidget {
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
                       tooltip: 'Yeniden adlandır',
-                      onPressed: () => _showRenameDialog(context, ref, category),
+                      onPressed: () => _showRenameDialog(context, category),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline),
@@ -49,74 +50,38 @@ class CategoryManagementScreen extends ConsumerWidget {
         error: (err, stack) => Center(child: Text('Hata: $err')),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddDialog(context, ref),
+        onPressed: () => _showAddDialog(context),
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    final controller = TextEditingController();
+  // Not (düzeltme, 28 Temmuz 2026): Bu iki diyalog önceden kendi
+  // TextEditingController'larını doğrudan burada tutuyor, dispose()'unu
+  // showDialog()'un Future'ına (.whenComplete) bağlıyordu. Gerçek cihazda
+  // bu, tam olarak task_list_screen.dart'ta görülen aynı çökmeye yol açtı
+  // ("TextEditingController was used after being disposed" — rename
+  // diyaloğunda tetiklendi). Kök neden liste sıralamasıyla değil, dış
+  // Future zamanlamasının kendisiyle ilgiliydi. Artık ikisi de ortak,
+  // widget-yaşam-döngüsüne bağlı CategoryNameDialog'u kullanıyor — bkz.
+  // category_name_dialog.dart'taki açıklama.
+  void _showAddDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Yeni Kategori'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Kategori adı'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isEmpty) return;
-              await ref.read(categoryListProvider.notifier).addCategory(name);
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Ekle'),
-          ),
-        ],
+      builder: (context) => const CategoryNameDialog(
+        title: 'Yeni Kategori',
+        confirmLabel: 'Ekle',
       ),
     );
   }
 
-  void _showRenameDialog(
-    BuildContext context,
-    WidgetRef ref,
-    Category category,
-  ) {
-    final controller = TextEditingController(text: category.name);
+  void _showRenameDialog(BuildContext context, Category category) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Yeniden Adlandır'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Kategori adı'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newName = controller.text.trim();
-              if (newName.isEmpty) return;
-              await ref
-                  .read(categoryListProvider.notifier)
-                  .renameCategory(category.id, newName);
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Kaydet'),
-          ),
-        ],
+      builder: (context) => CategoryNameDialog(
+        title: 'Yeniden Adlandır',
+        confirmLabel: 'Kaydet',
+        existingCategory: category,
       ),
     );
   }
